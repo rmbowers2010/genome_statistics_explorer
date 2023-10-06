@@ -1,0 +1,10 @@
+name: genome_statistics_explorer
+title:
+username: b46mns-robert-bowers
+account: b46mns-robert-bowers
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 10004234
+bundleId: 7770009
+url: https://b46mns-robert-bowers.shinyapps.io/genome_statistics_explorer/
+version: 1
