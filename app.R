@@ -206,7 +206,7 @@ observe({
       updateSelectInput(session, "box2", selected = "") 
       updateSelectInput(session, "scatter_y", selected = "")
       updateSelectInput(session, "filterNA", selected = "")
-      updateSelectInput(session, "unknown", selected = "")
+      updateSelectInput(session, "filterNA", selected = "")
       updateSelectInput(session, "filterFactor", selected = "")
       updateSelectInput(session, "filterFactor2", selected = "")
       updateSelectInput(session, "filterFactor3", selected = "") 
