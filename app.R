@@ -65,6 +65,9 @@ ui <- navbarPage("Genome quality statics app",
                     tags$p(class="big-font", tags$b("Secondary Filter:"), "Select factor, choose level"),
                     selectizeInput("filterFactor2", "Choose a Secondary Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
                     selectizeInput("level2", "Choose Level(s) for Secondary Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+                    tags$p(class="big-font", tags$b("Third Filter:"), "Select factor, choose level"),
+                    selectizeInput("filterFactor3", "Choose a Third Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+                    selectizeInput("level3", "Choose Level(s) for Third Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
                     tags$hr(), # Separator line
                     actionButton("filter", strong("Filter")),
                     tags$hr(), # Separator line
@@ -125,6 +128,7 @@ server <- function(input, output, session) {
     ## UPDATE SELECT INPUT SECTION
       updateSelectInput(session, "filterFactor", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
       updateSelectInput(session, "filterFactor2", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
+      updateSelectInput(session, "filterFactor3", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
       updateSelectInput(session, "box1", choices = names(input.tmp[sapply(input.tmp, is.factor)]))
       updateSelectInput(session, "box2", choices = c("", names(input.tmp[sapply(input.tmp, is.numeric)])))
       updateSelectInput(session, "scatter_x", choices = c("", names(input.tmp[sapply(input.tmp, is.numeric)]))) 
@@ -141,6 +145,9 @@ observe({
 
     if(!is.null(input$filteredFactor2) && input$filteredFactor2 %in% colnames(data())) {
         updateSelectizeInput(session, "level2", choices = unique(data()[[input$filteredFactor2]]))
+    }
+    if(!is.null(input$filteredFactor3) && input$filteredFactor3 %in% colnames(data())) {
+        updateSelectizeInput(session, "level3", choices = unique(data()[[input$filteredFactor3]]))
     }
 })
 
@@ -167,6 +174,11 @@ observe({
     }
   }, ignoreInit = TRUE)
 
+  observeEvent(input$filterFactor3, {
+    if (input$filterFactor3 != "") {
+      updateSelectInput(session, "level3", choices = c("", levels(data()[[input$filterFactor3]])))
+    }
+  }, ignoreInit = TRUE)
 
   # Update scatter_y when box2 changes
   observeEvent(input$box2, {
@@ -189,11 +201,15 @@ observe({
       updateSelectInput(session, "factor", selected = "")
       updateSelectInput(session, "level", selected = "")
       updateSelectInput(session, "level2", selected = "")
+      updateSelectInput(session, "level3", selected = "")
       updateSelectInput(session, "box1", selected = "")
       updateSelectInput(session, "box2", selected = "") 
       updateSelectInput(session, "scatter_y", selected = "")
+      updateSelectInput(session, "filterNA", selected = "")
+      updateSelectInput(session, "unknown", selected = "")
       updateSelectInput(session, "filterFactor", selected = "")
-      updateSelectInput(session, "filterFactor2", selected = "") 
+      updateSelectInput(session, "filterFactor2", selected = "")
+      updateSelectInput(session, "filterFactor3", selected = "") 
       # Reset reactive values
       filtered_data(NULL)  # Reset filtered_data
       brushed_data(NULL)   # Reset brushed_data
@@ -217,6 +233,12 @@ observe({
       filtered <- filtered %>%
         filter(.data[[input$filterFactor2]] %in% input$level2)
     }
+
+    if (!is.null(input$filterFactor3) && input$filterFactor3 != "" && !is.null(input$level3) && length(input$level3) > 0) {
+      filtered <- filtered %>%
+        filter(.data[[input$filterFactor3]] %in% input$level3)
+    }
+
 
     # Check if filtered data is not empty
     if (nrow(filtered) > 0) {
