@@ -57,6 +57,8 @@ ui <- navbarPage("Genome quality statics app",
                     tags$hr(), # Separator line
                     checkboxInput("filterNA", "Filter NAs", value = FALSE),
                     tags$hr(), # Separator line
+                    actionButton("sort_box", "Sort Boxplot"),
+                    tags$hr(), # Separator line
                     tags$p(class="big-font", tags$b("To Filter:"), "Select factor, choose level, then hit", tags$b("Filter Button")),
                     tags$p(tags$b("Hitting the filter button is required to filter data")),
                     selectizeInput("filterFactor", "Choose a Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
@@ -65,9 +67,6 @@ ui <- navbarPage("Genome quality statics app",
                     tags$p(class="big-font", tags$b("Secondary Filter:"), "Select factor, choose level"),
                     selectizeInput("filterFactor2", "Choose a Secondary Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
                     selectizeInput("level2", "Choose Level(s) for Secondary Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    tags$p(class="big-font", tags$b("Third Filter:"), "Select factor, choose level"),
-                    selectizeInput("filterFactor3", "Choose a Third Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    selectizeInput("level3", "Choose Level(s) for Third Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
                     tags$hr(), # Separator line
                     actionButton("filter", strong("Filter")),
                     tags$hr(), # Separator line
@@ -110,6 +109,11 @@ server <- function(input, output, session) {
   
   brushed_data <- reactiveVal()
   filtered_data <- reactiveVal(NULL)  # Initialize filtered_data as NULL
+ 
+#  ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+ sort_boxplot <- reactiveVal(FALSE)
+#  ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+
   
   ## READING INPUT FILE AND SETTING UP REACTIVES
   data <- reactive({
@@ -128,7 +132,6 @@ server <- function(input, output, session) {
     ## UPDATE SELECT INPUT SECTION
       updateSelectInput(session, "filterFactor", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
       updateSelectInput(session, "filterFactor2", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
-      updateSelectInput(session, "filterFactor3", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
       updateSelectInput(session, "box1", choices = names(input.tmp[sapply(input.tmp, is.factor)]))
       updateSelectInput(session, "box2", choices = c("", names(input.tmp[sapply(input.tmp, is.numeric)])))
       updateSelectInput(session, "scatter_x", choices = c("", names(input.tmp[sapply(input.tmp, is.numeric)]))) 
@@ -145,9 +148,6 @@ observe({
 
     if(!is.null(input$filteredFactor2) && input$filteredFactor2 %in% colnames(data())) {
         updateSelectizeInput(session, "level2", choices = unique(data()[[input$filteredFactor2]]))
-    }
-    if(!is.null(input$filteredFactor3) && input$filteredFactor3 %in% colnames(data())) {
-        updateSelectizeInput(session, "level3", choices = unique(data()[[input$filteredFactor3]]))
     }
 })
 
@@ -174,11 +174,6 @@ observe({
     }
   }, ignoreInit = TRUE)
 
-  observeEvent(input$filterFactor3, {
-    if (input$filterFactor3 != "") {
-      updateSelectInput(session, "level3", choices = c("", levels(data()[[input$filterFactor3]])))
-    }
-  }, ignoreInit = TRUE)
 
   # Update scatter_y when box2 changes
   observeEvent(input$box2, {
@@ -187,12 +182,23 @@ observe({
     }
   }, ignoreInit = TRUE) # 'ignoreInit' ensures that this won't trigger at app initialization
 
+
+
+
   # Update box2 when scatter_y changes
   observeEvent(input$scatter_y, {
     if (input$scatter_y != input$box2) {
       updateSelectInput(session, "box2", selected = input$scatter_y)
     }
   }, ignoreInit = TRUE) # 'ignoreInit' ensures that this won't trigger at app initialization
+
+
+
+# ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+observeEvent(input$sort_box, {
+  sort_boxplot(!sort_boxplot())
+})
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
 
   reset_triggered <- reactiveVal(FALSE)
   
@@ -201,15 +207,11 @@ observe({
       updateSelectInput(session, "factor", selected = "")
       updateSelectInput(session, "level", selected = "")
       updateSelectInput(session, "level2", selected = "")
-      updateSelectInput(session, "level3", selected = "")
       updateSelectInput(session, "box1", selected = "")
       updateSelectInput(session, "box2", selected = "") 
       updateSelectInput(session, "scatter_y", selected = "")
-      updateSelectInput(session, "filterNA", selected = "")
-      updateSelectInput(session, "filterNA", selected = "")
       updateSelectInput(session, "filterFactor", selected = "")
-      updateSelectInput(session, "filterFactor2", selected = "")
-      updateSelectInput(session, "filterFactor3", selected = "") 
+      updateSelectInput(session, "filterFactor2", selected = "") 
       # Reset reactive values
       filtered_data(NULL)  # Reset filtered_data
       brushed_data(NULL)   # Reset brushed_data
@@ -233,12 +235,6 @@ observe({
       filtered <- filtered %>%
         filter(.data[[input$filterFactor2]] %in% input$level2)
     }
-
-    if (!is.null(input$filterFactor3) && input$filterFactor3 != "" && !is.null(input$level3) && length(input$level3) > 0) {
-      filtered <- filtered %>%
-        filter(.data[[input$filterFactor3]] %in% input$level3)
-    }
-
 
     # Check if filtered data is not empty
     if (nrow(filtered) > 0) {
@@ -267,25 +263,60 @@ boxplot_output <- reactive({
     if (!is.null(filtered_data())) filtered_data() else data()
   }
 
+  # Ensure interaction_values handles multiple columns properly
+  interaction_values <- if (length(input$box1) > 1) {
+    interaction(data_filtered[, input$box1, drop = FALSE])
+  } else {
+    data_filtered[[input$box1]]
+  }
+
   # Filter out NAs if filterNA is checked
   if (input$filterNA) {
     data_filtered <- data_filtered[!is.na(data_filtered[[input$box2]]), ]
   }
-  interaction_values <- interaction(data_filtered[, input$box1, drop = FALSE])
-  
+ 
   # If input$unknown is true, filter out 'unknown' from interaction_values
   if(input$unknown) {
     data_filtered <- data_filtered[!grepl("unknown", interaction_values),]
     interaction_values <- interaction_values[!grepl("unknown", interaction_values)]
   }
 
+    ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+    # Sort the boxplot based on the mean of each group if sort_boxplot() is TRUE
+    if (sort_boxplot()) {
+      # If 'input$box1' has more than one column selected, concatenate their values; otherwise, use the selected column directly.
+      if (length(input$box1) > 1) {
+        data_filtered <- data_filtered %>%
+          rowwise() %>%
+          mutate(interaction_values = paste(c_across(all_of(input$box1)), collapse = "_")) %>%
+          ungroup()
+      } else {
+        # Directly use the column from 'input$box1' as 'interaction_values'.
+        data_filtered$interaction_values <- as.character(data_filtered[[input$box1]])
+      }
+      # Convert 'interaction_values' to a factor and set its levels.
+      data_filtered$interaction_values <- factor(data_filtered$interaction_values, levels = unique(data_filtered$interaction_values))
+      # Debugging: Print the levels to check their consistency.
+      print(levels(data_filtered$interaction_values))
+      # Calculate the mean for input$box2 for each group in 'interaction_values'.
+      means <- data_filtered %>%
+        group_by(interaction_values) %>%
+        summarise(mean_val = mean(.data[[input$box2]], na.rm = TRUE)) %>%
+        arrange(desc(mean_val))
+      # Reorder the levels based on the calculated means.
+      if (nrow(means) > 0 && !all(is.na(means$mean_val))) {
+        data_filtered$interaction_values <- factor(data_filtered$interaction_values, levels = means$interaction_values)
+      }
+    }
+    ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+ 
   # Calculate the total count
   total_count <- nrow(data_filtered)
   # Calculate the count for each group
   counts <- data_filtered %>%
     group_by(group = interaction_values) %>%
     summarise(n = n())
-  
+
   p <- ggplot(data_filtered, aes(x = interaction_values, 
                                  y = .data[[input$box2]], 
                                  fill = interaction_values,
@@ -309,6 +340,7 @@ boxplot_output <- reactive({
   
   levels_count <- length(unique(interaction_values))
 
+
   if (levels_count > 1) {
     p <- p + scale_fill_manual(values = fixed_palette(levels_count)[1:levels_count], 
                               labels = function(x) {
@@ -326,6 +358,7 @@ boxplot_output <- reactive({
                label = paste("Total count =", total_count),
                hjust = 1, vjust = 1, size = 6, color = "black")
   }
+
 
   # Updating x-axis labels with count
   p <- p + scale_x_discrete(labels = function(x) {
@@ -425,7 +458,37 @@ scatterplot_output <- reactive({
     if (input$filterNA) {
         data_filtered <- data_filtered[!is.na(data_filtered[[input$box2]]), ]
     }
-      
+   
+    ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+    ## Same as above for boxplot, can probably reduce, but req to maintain colors btwn box and scatter
+    # Sort the boxplot based on the mean of each group if sort_boxplot() is TRUE
+    if (sort_boxplot()) {
+      # If 'input$box1' has more than one column selected, concatenate their values; otherwise, use the selected column directly.
+      if (length(input$box1) > 1) {
+        data_filtered <- data_filtered %>%
+          rowwise() %>%
+          mutate(interaction_values = paste(c_across(all_of(input$box1)), collapse = "_")) %>%
+          ungroup()
+      } else {
+        # Directly use the column from 'input$box1' as 'interaction_values'.
+        data_filtered$interaction_values <- as.character(data_filtered[[input$box1]])
+      }
+      # Convert 'interaction_values' to a factor and set its levels.
+      data_filtered$interaction_values <- factor(data_filtered$interaction_values, levels = unique(data_filtered$interaction_values))
+      # Debugging: Print the levels to check their consistency.
+      print(levels(data_filtered$interaction_values))
+      # Calculate the mean for input$box2 for each group in 'interaction_values'.
+      means <- data_filtered %>%
+        group_by(interaction_values) %>%
+        summarise(mean_val = mean(.data[[input$box2]], na.rm = TRUE)) %>%
+        arrange(desc(mean_val))
+      # Reorder the levels based on the calculated means.
+      if (nrow(means) > 0 && !all(is.na(means$mean_val))) {
+        data_filtered$interaction_values <- factor(data_filtered$interaction_values, levels = means$interaction_values)
+      }
+    }
+    ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+     
     if (is.null(input$box1)) {
         total_count <- nrow(data_filtered)
         p <- ggplot(data_filtered, aes_string(x=input$scatter_x, y=input$scatter_y)) +
