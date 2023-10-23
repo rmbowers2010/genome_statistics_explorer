@@ -11,6 +11,7 @@ library(shinythemes)
 library(randomcoloR)
 library(corrr)
 library(tibble) # deframe()
+
 ui <- navbarPage("Genome quality statics app",
        theme = shinytheme("spacelab"),
        tags$head(
@@ -58,11 +59,11 @@ ui <- navbarPage("Genome quality statics app",
                     tags$hr(), # Separator line
                     tags$p(class="big-font", tags$b("To Filter:"), "Select factor, choose level, then hit", tags$b("Filter Button")),
                     tags$p(tags$b("Hitting the filter button is required to filter data")),
-                    selectizeInput("factor", "Choose a Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+                    selectizeInput("filterFactor", "Choose a Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
                     selectizeInput("level", "Choose Level(s) to Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
                     tags$hr(), # Separator line
                     tags$p(class="big-font", tags$b("Secondary Filter:"), "Select factor, choose level"),
-                    selectizeInput("factor2", "Choose a Secondary Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+                    selectizeInput("filterFactor2", "Choose a Secondary Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
                     selectizeInput("level2", "Choose Level(s) for Secondary Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
                     tags$hr(), # Separator line
                     actionButton("filter", strong("Filter")),
@@ -122,7 +123,8 @@ server <- function(input, output, session) {
        mutate_if(is.integer, as.numeric)
 
     ## UPDATE SELECT INPUT SECTION
-      updateSelectInput(session, "factor", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
+      updateSelectInput(session, "filterFactor", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
+      updateSelectInput(session, "filterFactor2", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
       updateSelectInput(session, "box1", choices = names(input.tmp[sapply(input.tmp, is.factor)]))
       updateSelectInput(session, "box2", choices = c("", names(input.tmp[sapply(input.tmp, is.numeric)])))
       updateSelectInput(session, "scatter_x", choices = c("", names(input.tmp[sapply(input.tmp, is.numeric)]))) 
@@ -131,7 +133,16 @@ server <- function(input, output, session) {
     return(input.tmp)
   })
   
+observe({
+    # Update the level and level2 dropdowns based on the selected factor
+    if(!is.null(input$filteredFactor) && input$filteredFactor %in% colnames(data())) {
+        updateSelectizeInput(session, "level", choices = unique(data()[[input$filteredFactor]]))
+    }
 
+    if(!is.null(input$filteredFactor2) && input$filteredFactor2 %in% colnames(data())) {
+        updateSelectizeInput(session, "level2", choices = unique(data()[[input$filteredFactor2]]))
+    }
+})
 
   
   # Automatically set scatter_x to the second numeric column if available
@@ -143,12 +154,19 @@ server <- function(input, output, session) {
     }
   })
 
-  # Update level choices when factor changes
-  observeEvent(input$factor, {
-    if (input$factor != "") {
-      updateSelectInput(session, "level", choices = c("", levels(data()[[input$factor]])))
+  # Update level choices when filterFactor changes
+  observeEvent(input$filterFactor, {
+    if (input$filterFactor != "") {
+      updateSelectInput(session, "level", choices = c("", levels(data()[[input$filterFactor]])))
     }
   }, ignoreInit = TRUE)
+
+  observeEvent(input$filterFactor2, {
+    if (input$filterFactor2 != "") {
+      updateSelectInput(session, "level2", choices = c("", levels(data()[[input$filterFactor2]])))
+    }
+  }, ignoreInit = TRUE)
+
 
   # Update scatter_y when box2 changes
   observeEvent(input$box2, {
@@ -170,9 +188,12 @@ server <- function(input, output, session) {
       # Reset UI components
       updateSelectInput(session, "factor", selected = "")
       updateSelectInput(session, "level", selected = "")
+      updateSelectInput(session, "level2", selected = "")
       updateSelectInput(session, "box1", selected = "")
       updateSelectInput(session, "box2", selected = "") 
-      updateSelectInput(session, "scatter_y", selected = "") 
+      updateSelectInput(session, "scatter_y", selected = "")
+      updateSelectInput(session, "filterFactor", selected = "")
+      updateSelectInput(session, "filterFactor2", selected = "") 
       # Reset reactive values
       filtered_data(NULL)  # Reset filtered_data
       brushed_data(NULL)   # Reset brushed_data
@@ -183,21 +204,29 @@ server <- function(input, output, session) {
     })
 
   observeEvent(input$filter, {
-    print(input$factor)
-    print(input$level)
-    req(input$factor, input$level)
+    req(input$filterFactor, input$level)
 
-    filtered <- data() %>%
-     filter(.data[[input$factor]] %in% input$level) %>%
-     filter(if(input$unknown) (.data[[input$level]] != "unknown") else TRUE)
-       
-   # Check if filtered data is not empty
-   if (nrow(filtered) > 0) {
-     filtered_data(filtered)
-   } else {
-     filtered_data(NULL)
-   }
+    filtered <- data()
+    
+    if (!is.null(input$filterFactor) && input$filterFactor != "") {
+      filtered <- filtered %>%
+        filter(.data[[input$filterFactor]] %in% input$level)
+    }
+
+    if (!is.null(input$filterFactor2) && input$filterFactor2 != "" && !is.null(input$level2) && length(input$level2) > 0) {
+      filtered <- filtered %>%
+        filter(.data[[input$filterFactor2]] %in% input$level2)
+    }
+
+    # Check if filtered data is not empty
+    if (nrow(filtered) > 0) {
+      filtered_data(filtered)
+    } else {
+      filtered_data(NULL)
+    }
   })
+
+
 
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
 ## Color palette
@@ -358,92 +387,88 @@ output$downloadTukeyTSV <- downloadHandler(
 
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
   # Scatter plot
-  scatterplot_output <- reactive({
+scatterplot_output <- reactive({
     req(input$scatter_x, input$scatter_y)
 
     # Priority changes: if reset is triggered, avoid brushed_data
     data_filtered <- if (!reset_triggered() && !is.null(brushed_data())) {
-      brushed_data()
+        brushed_data()
     } else if (!is.null(filtered_data())) {
-      filtered_data()
+        filtered_data()
     } else {
-      data()
-    }
- 
-# Filter out NAs if filterNA is checked
-if (input$filterNA) {
-  data_filtered <- data_filtered[!is.na(data_filtered[[input$box2]]), ]
-}
-  
-  if (is.null(input$box1)) {
-    total_count <- nrow(data_filtered)
-    p <- ggplot(data_filtered, aes_string(x=input$scatter_x, y=input$scatter_y)) +
-      geom_point(size = 4, alpha=0.75) +
-      ylab(input$scatter_y) +
-      ggtitle(paste("Filter Column:", input$factor, 
-                "\nFilter Level:", paste(input$level, collapse = ", "))) +
-      theme_classic() + 
-      theme(axis.text.x = element_text(size=16, color="black"),
-            axis.text.y = element_text(size=14, color="black"),
-            axis.title.x = element_text(size=16, color="black"),
-            axis.title.y = element_text(size=16, color="black"),
-            legend.title = element_text(size = 14, color="black"),
-            legend.text = element_text(size=12, color="black"),
-            plot.margin = unit(c(1, 1, 1, 1), "cm")) +
-      annotate("text", x = Inf, y = Inf,
-                label = paste("Total count =", total_count),
-                hjust = 1, vjust = 1, size = 6, color = "black")
-  } else {
-
-    interaction_values <- interaction(data_filtered[, input$box1, drop = FALSE])
-    
-    # If input$unknown is true, filter out 'unknown' from interaction_values
-    if(input$unknown) {
-      data_filtered <- data_filtered[!grepl("unknown", interaction_values),]
-      interaction_values <- interaction_values[!grepl("unknown", interaction_values)]
+        data()
     }
     
-    # Calculate the total count
-    total_count <- nrow(data_filtered)
-    
-    # Calculate the count for each group
-    counts <- data_filtered %>%
-      group_by(group = interaction_values) %>%
-      summarise(n = n()) %>%
-      deframe() # Convert to named vector
+    # Filter out NAs if filterNA is checked
+    if (input$filterNA) {
+        data_filtered <- data_filtered[!is.na(data_filtered[[input$box2]]), ]
+    }
       
-    # Modify counts to include them in legend labels
-    new_labels <- paste(names(counts), " (n =", counts, ")")
-    
-    p <- ggplot(data_filtered, aes_string(x=input$scatter_x, y=input$scatter_y)) +
-      geom_point(size = 4, alpha=0.75, aes(color = interaction_values)) +
-      ylab(input$scatter_y) +
-      ggtitle(paste("Filter Column:", input$factor, 
-                    "\nFilter Level:", paste(input$level, collapse = ", "))) +
-      guides(color = guide_legend(width = unit(2, "in"), title = paste(input$box1, collapse=", "), ncol=1)) +
-      theme_classic() + 
-      theme(axis.text.x = element_text(size=16, color="black"),
-            axis.text.y = element_text(size=14, color="black"),
-            axis.title.x = element_text(size=16, color="black"),
-            axis.title.y = element_text(size=16, color="black"),
-            legend.title = element_text(size = 14, color="black"),
-            legend.text = element_text(size=12, color="black"),
-            plot.margin = unit(c(1, 1, 1, 1), "cm")) +
-      annotate("text", x = Inf, y = Inf,
-                label = paste("Total count =", total_count),
-                hjust = 1, vjust = 1, size = 6, color = "black")
-  }
+    if (is.null(input$box1)) {
+        total_count <- nrow(data_filtered)
+        p <- ggplot(data_filtered, aes_string(x=input$scatter_x, y=input$scatter_y)) +
+            geom_point(size = 4, alpha=0.75) +
+            ylab(input$scatter_y) +
+            ggtitle(paste("Filter Column:", input$factor, 
+                          "\nFilter Level:", paste(input$level, collapse = ", "))) +
+            theme_classic() + 
+            theme(axis.text.x = element_text(size=16, color="black"),
+                  axis.text.y = element_text(size=14, color="black"),
+                  axis.title.x = element_text(size=16, color="black"),
+                  axis.title.y = element_text(size=16, color="black"),
+                  legend.title = element_text(size = 14, color="black"),
+                  legend.text = element_text(size=12, color="black"),
+                  plot.margin = unit(c(1, 1, 1, 1), "cm")) +
+            annotate("text", x = Inf, y = Inf,
+                     label = paste("Total count =", total_count),
+                     hjust = 1, vjust = 1, size = 6, color = "black")
+    } else {
+        interaction_values <- interaction(data_filtered[, input$box1, drop = FALSE])
 
-  if (!is.null(input$box1) && input$box1 %in% names(data_filtered)) {
-    interaction_values <- interaction(data_filtered[, input$box1, drop = FALSE])
-    levels_count <- length(unique(interaction_values))
-    
-    if (levels_count > 1) {
-      p <- p + scale_color_manual(values = fixed_palette(levels_count)[1:levels_count], labels = new_labels)
+        # If input$unknown is true, filter out 'unknown' from interaction_values
+        if (input$unknown) {
+            data_filtered <- data_filtered[!grepl("unknown", interaction_values),]
+            interaction_values <- interaction_values[!grepl("unknown", interaction_values)]
+        }
+        
+        total_count <- nrow(data_filtered)
+
+        counts <- data_filtered %>%
+            group_by(group = interaction_values) %>%
+            summarise(n = n()) %>%
+            deframe() # Convert to named vector
+        
+        new_labels <- paste(names(counts), " (n =", counts, ")")
+
+        p <- ggplot(data_filtered, aes_string(x=input$scatter_x, y=input$scatter_y)) +
+            geom_point(size = 4, alpha=0.75, aes(color = interaction_values)) +
+            ylab(input$scatter_y) +
+            ggtitle(paste("Filter Column:", input$factor, 
+                          "\nFilter Level:", paste(input$level, collapse = ", "))) +
+            guides(color = guide_legend(width = unit(2, "in"), title = paste(input$box1, collapse=", "), ncol=1)) +
+            theme_classic() + 
+            theme(axis.text.x = element_text(size=16, color="black"),
+                  axis.text.y = element_text(size=14, color="black"),
+                  axis.title.x = element_text(size=16, color="black"),
+                  axis.title.y = element_text(size=16, color="black"),
+                  legend.title = element_text(size = 14, color="black"),
+                  legend.text = element_text(size=12, color="black"),
+                  plot.margin = unit(c(1, 1, 1, 1), "cm")) +
+            annotate("text", x = Inf, y = Inf,
+                     label = paste("Total count =", total_count),
+                     hjust = 1, vjust = 1, size = 6, color = "black")
     }
-  }
 
-  p # using print(p), caused brush reload to fail
+    if (!is.null(input$box1) && any(input$box1 %in% names(data_filtered))) {
+        interaction_values <- interaction(data_filtered[, input$box1, drop = FALSE])
+        levels_count <- length(unique(interaction_values))
+        
+        if (levels_count > 1) {
+            p <- p + scale_color_manual(values = fixed_palette(levels_count)[1:levels_count], labels = new_labels)
+        }
+    }
+
+    p # using print(p), caused brush reload to fail
 })
 
 
@@ -477,8 +502,10 @@ output$downloadScatter <- downloadHandler(
 calculate_pairwise_correlations <- reactive({
   req(input$scatter_x, input$scatter_y)
   
+  req(length(input$scatter_x) == 1, length(input$scatter_y) == 1)
+
   if (input$scatter_x == input$scatter_y) {
-    stop("Correlation Table requires different variables for X and Y axes.")
+      stop("Correlation Table requires different variables for X and Y axes.")
   }
   
   data_filtered <- if (!is.null(brushed_data())) {
@@ -494,7 +521,6 @@ calculate_pairwise_correlations <- reactive({
     data_filtered <- data_filtered[!is.na(data_filtered[[input$box2]]), ]
   }
 
-
   selected_cols <- select(data_filtered, all_of(c(input$scatter_x, input$scatter_y)))
   selected_cols <- as.data.frame(selected_cols)
   
@@ -504,28 +530,31 @@ calculate_pairwise_correlations <- reactive({
   }
 
   # If box1 is not selected, compute a simple correlation
-  if (is.null(input$box1) || !(input$box1 %in% names(data_filtered))) {
+  if (is.null(input$box1) || length(input$box1) == 0) {
     corr_value <- round(cor(selected_cols[[input$scatter_x]], selected_cols[[input$scatter_y]], use = "complete.obs"), 2)
     return(data.frame(Pair = "Total", Correlation = corr_value))
   }
 
+  # Create interaction values
+  interaction_values <- interaction(data_filtered[, input$box1], drop = TRUE, lex.order = TRUE)
 
-
-  interaction_values <- interaction(data_filtered[, input$box1, drop = FALSE])
-  
   # If input$unknown is true, filter out 'unknown' from interaction_values
   if(input$unknown) {
     data_filtered <- data_filtered[!grepl("unknown", interaction_values),]
     interaction_values <- interaction_values[!grepl("unknown", interaction_values)]
   }
 
-  factor_cols <- data_filtered[, input$box1, drop = FALSE]
-  combined_factor <- apply(factor_cols, 1, function(row) {
-    paste(row, collapse = "_")
-  })
+  combined_factor <- as.character(interaction_values)
   levels <- unique(combined_factor)
+
+  # If there's only one unique level in combined_factor, return only the total correlation
+  if (length(levels) == 1) {
+    corr_value <- round(cor(selected_cols[[input$scatter_x]], selected_cols[[input$scatter_y]], use = "complete.obs"), 2)
+    return(data.frame(Pair = "Total", Correlation = corr_value))
+  }
+
   corr_list <- list()
-  
+
   # Calculating correlations for each pair
   for (i in 1:(length(levels) - 1)) {
     for (j in (i + 1):length(levels)) {
@@ -536,8 +565,7 @@ calculate_pairwise_correlations <- reactive({
       corr_list[[paste(levels[i], "vs", levels[j])]] <- corr_value
     }
   } 
-  
-  # Add total correlation (average in this case)
+
   total_corr <- round(mean(unlist(corr_list)), 2)
   total_df <- data.frame(Pair = "Total", Correlation = total_corr)
   corr_df <- data.frame(Pair = names(corr_list), Correlation = unlist(corr_list))
@@ -596,19 +624,52 @@ output$dataTable <- renderDataTable({
     data()
   }
   
+  # If filterNA is checked, remove rows with NA values in the box2 column
+  if (input$filterNA && !is.null(input$box2)) {
+    data_to_display <- data_to_display[!is.na(data_to_display[[input$box2]]), ]
+  }
+  
+  # If unknown is checked, filter out 'unknown' from factor columns
+  if (input$unknown) {
+    factor_cols <- names(data_to_display[sapply(data_to_display, is.factor)])
+    for (col in factor_cols) {
+      data_to_display <- data_to_display[!data_to_display[[col]] %in% c("unknown"), ]
+    }
+  }
+  
   data_to_display
 })
+
 output$downloadDataTableTSV <- downloadHandler(
   filename = function() {
     paste("final_data_table", ".tsv", sep = "")
   },
   content = function(file) {
-    write.table(if (!is.null(brushed_data())) brushed_data() else data(), 
-                file, 
-                sep = "\t", 
-                row.names = FALSE)
+    data_to_save <- if (!is.null(brushed_data())) {
+      brushed_data()
+    } else if (!is.null(filtered_data())) {
+      filtered_data()
+    } else {
+      data()
+    }
+    
+    # If filterNA is checked, remove rows with NA values in the box2 column
+    if (input$filterNA && !is.null(input$box2)) {
+      data_to_save <- data_to_save[!is.na(data_to_save[[input$box2]]), ]
+    }
+  
+    # If unknown is checked, filter out 'unknown' from factor columns
+    if (input$unknown) {
+      factor_cols <- names(data_to_save[sapply(data_to_save, is.factor)])
+      for (col in factor_cols) {
+        data_to_save <- data_to_save[!data_to_save[[col]] %in% c("unknown"), ]
+      }
+    }
+    
+    write.table(data_to_save, file, sep = "\t", row.names = FALSE)
   }
 )
+
 
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## #
 ## RESET BUTTON
@@ -616,6 +677,9 @@ output$downloadDataTableTSV <- downloadHandler(
   # observeEvent(input$reset2, {
   #   updateSelectInput(session, "scatter_x", selected = "")
   #   updateSelectInput(session, "scatter_y", selected = "")
+  #   updateSelectInput(session, "factor", selected = "")
+  #   updateSelectInput(session, "factor2", selected = "")
+  #   updateSelectInput(session, "box1", selected = "")
   #   brushed_data(NULL)
   # })
 

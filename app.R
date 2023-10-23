@@ -78,7 +78,7 @@ ui <- navbarPage("Genome quality statics app",
                     actionButton("filter", "Filter"),
                     tags$hr(), # Separator line
                     actionButton("reset", "Reset"),
-                    width=2
+                    width=3
                   ),                          
                   mainPanel(
                     plotOutput("boxPlot", height = "1000px"),
@@ -98,7 +98,7 @@ ui <- navbarPage("Genome quality statics app",
                     tags$hr(), # Separator line
                     actionButton("reset_scatter", "Reset"),
 
-                     width=2
+                     width=3
                    ),
                    mainPanel(
                      plotOutput("scatterPlot", height = "700px", width = "95%", brush = brushOpts(id = "scatter_brush")),
