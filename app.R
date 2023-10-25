@@ -13,105 +13,122 @@ library(corrr)
 library(tibble) # deframe()
 
 ui <- navbarPage("Genome quality statics app",
-       id = "main_tabs",  # Setting the ID for the navbarPage
-       theme = shinytheme("spacelab"),
-       tags$head(
-         tags$style(HTML("
-           .big-font {
-             font-size: 20px;
-           }
-           .sidebar {
-             width: 20%;
-           }
-           .main {
-             width: 80%;
-             padding-right: 0;
-           }
-           .shiny-plot-output, .shiny-data-table-output {
-             width: 100% !important;
-           }
-           .shiny-output-error {
-             width: 100%;
-           }
-         "))
-       ),
-       tags$script('
-        Shiny.addCustomMessageHandler("resetBrush", function(variable) {
-            var brushId = "#" + variable;
-            var el = $(brushId);
-            var brush = el.data("brush");
-            if (brush) {
-            brush.clear();
-            el.trigger("change");
-            }
-        });
-        '),
+  id = "main_tabs",  # Setting the ID for the navbarPage
+  theme = shinytheme("spacelab"),
+  tags$head(
+    tags$style(HTML("
+      .big-font {
+        font-size: 20px;
+      }
+      .sidebar {
+        width: 20%;
+      }
+      .main {
+        width: 80%;
+        padding-right: 0;
+      }
+      .shiny-plot-output, .shiny-data-table-output {
+        width: 100% !important;
+      }
+      .shiny-output-error {
+        width: 100%;
+      }
+    "))
+  ),
+  tags$script('
+    Shiny.addCustomMessageHandler("resetBrush", function(variable) {
+        var brushId = "#" + variable;
+        var el = $(brushId);
+        var brush = el.data("brush");
+        if (brush) {
+        brush.clear();
+        el.trigger("change");
+        }
+    });
+    '),
 
-     tabPanel("Box plots",
-                sidebarLayout(
-                  sidebarPanel(
-                    fileInput("file", "Choose TSV File", accept = c(".tsv")),
-                    selectizeInput("box1", "Choose Columns for Boxplot (x-axis):", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    selectizeInput("box2", "Choose a Column for Boxplot (y-axis):", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    tags$hr(), # Separator line
-                    checkboxInput("unknown", HTML("Filter out genomes with <strong>unknown</strong> metadata annotation")),
-                    tags$hr(), # Separator line
-                    checkboxInput("filterNA", "Filter NAs", value = FALSE),
-                    tags$hr(), # Separator line
-                    actionButton("sort_box", "Sort Boxplot"),
-                    tags$hr(), # Separator line
-                    actionButton("flip_coord", "Flip boxplot xy axis"),
-                    tags$hr(), # Separator line
-                    tags$p(class="big-font", tags$b("To Filter:"), "Select factor, choose level, then hit", tags$b("Filter Button")),
-                    tags$p(tags$b("Hitting the filter button is required to filter data")),
-                    selectizeInput("filterFactor", "Choose a Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    selectizeInput("level", "Choose Level(s) to Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    tags$hr(), # Separator line
-                    tags$p(class="big-font", tags$b("Secondary Filter:"), "Select factor, choose level"),
-                    selectizeInput("filterFactor2", "Choose a Secondary Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    selectizeInput("level2", "Choose Level(s) for Secondary Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    tags$hr(), # Separator line
-                    tags$p(class="big-font", tags$b("Third Filter:"), "Select factor, choose level"),
-                    selectizeInput("filterFactor3", "Choose a Third Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    selectizeInput("level3", "Choose Level(s) for Third Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    tags$hr(), # Separator line
-                    actionButton("filter", "Filter"),
-                    tags$hr(), # Separator line
-                    actionButton("reset", "Reset"),
-                    width=2
-                  ),                          
-                  mainPanel(
-                    plotOutput("boxPlot", height = "1000px"),
-                    downloadButton("downloadBox", "Download Boxplot as PDF"),
-                    dataTableOutput("anovaTable"),
-                    downloadButton("downloadAnovaTSV", "Download ANOVA Table as TSV"),
-                    dataTableOutput("tukeyTable"),
-                    downloadButton("downloadTukeyTSV", "Download Tukey-HSD Table as TSV")  
-                  )
-                )
-                 ),                  
-                tabPanel("xy scatter plots",
-                 sidebarLayout(
-                   sidebarPanel(
-                     selectizeInput("scatter_x", "Choose x-axis:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                     selectizeInput("scatter_y", "Choose y axis:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
-                    tags$hr(), # Separator line
-                    actionButton("reset_scatter", "Reset"),
+  tabPanel("Box plots",
+    sidebarLayout(
+      sidebarPanel(
+        fileInput("file", "Choose TSV File", accept = c(".tsv")),
+        selectizeInput("box1", "Choose Columns for Boxplot (x-axis):", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        selectizeInput("box2", "Choose a Column for Boxplot (y-axis):", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        tags$hr(), # Separator line
+        checkboxInput("unknown", HTML("Filter out genomes with <strong>unknown</strong> metadata annotation")),
+        tags$hr(), # Separator line
+        checkboxInput("filterNA", "Filter NAs", value = FALSE),
+        tags$hr(), # Separator line
+        fluidRow(
+          column(width = 6, actionButton("sort_box", "Sort Boxplot")),
+          column(width = 6, actionButton("flip_coord", "Flip boxplot xy axis"))
+        ),
+        tags$hr(), # Separator line
+        fluidRow(
+          column(width = 6, actionButton("filter", "Filter")),
+          column(width = 6, actionButton("reset", "Reset"))
+        ),
+        # actionButton("sort_box", "Sort Boxplot"),
+        # tags$hr(), # Separator line
+        # actionButton("flip_coord", "Flip boxplot xy axis"),
+        # tags$hr(), # Separator line
+        # actionButton("filter", "Filter"),
+        # tags$hr(), # Separator line
+        # actionButton("reset", "Reset"),
+        tags$hr(), # Separator line
+        tags$p(class="big-font", tags$b("To Filter:"), "Select factor, choose level, then hit", tags$b("Filter Button")),
+        tags$p(tags$b("Hitting the filter button is required to filter data")),
+        selectizeInput("filterFactor", "Choose a Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        selectizeInput("level", "Choose Level(s) to Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        tags$hr(), # Separator line
+        tags$p(class="big-font", tags$b("Secondary Filter:"), "Select factor, choose level"),
+        selectizeInput("filterFactor2", "Choose a Secondary Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        selectizeInput("level2", "Choose Level(s) for Secondary Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        tags$hr(), # Separator line
+        tags$p(class="big-font", tags$b("Third Filter:"), "Select factor, choose level"),
+        selectizeInput("filterFactor3", "Choose a Third Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        selectizeInput("level3", "Choose Level(s) for Third Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        tags$hr(), # Separator line
+        tags$p(class="big-font", tags$b("Fourth Filter:"), "Select factor, choose level"),
+        selectizeInput("filterFactor4", "Choose a Fourth Factor Column to Filter:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        selectizeInput("level4", "Choose Level(s) for Fourth Filter:", choices = NULL, multiple = TRUE, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        width=2
+      ),                          
+      mainPanel(
+        plotOutput("boxPlot", height = "1000px"),
+        downloadButton("downloadBox", "Download Boxplot as PDF"),
+        # Add the Summary Stats tab panel here
 
-                     width=2
-                   ),
-                   mainPanel(
-                     plotOutput("scatterPlot", height = "700px", width = "95%", brush = brushOpts(id = "scatter_brush")),
-                     downloadButton("downloadScatter", "Download Boxplot as PDF"),
-                     dataTableOutput("corrTable"),
-                     downloadButton("downloadCorrelationTSV", "Download Correlation Table as TSV")  
-                   )
-                    )
-                 ),
-                 tabPanel("Data table",
-                          dataTableOutput("dataTable"),
-                          downloadButton("downloadDataTableTSV", "Download Data Table")  
-                 )
+        dataTableOutput("summaryTable"),
+        downloadButton("downloadSummary", "Download Summary Stats as CSV"),
+        dataTableOutput("anovaTable"),
+        downloadButton("downloadAnovaTSV", "Download ANOVA Table as TSV"),
+        dataTableOutput("tukeyTable"),
+        downloadButton("downloadTukeyTSV", "Download Tukey-HSD Table as TSV"),    
+      )
+    )
+  ),
+  tabPanel("xy scatter plots",
+    sidebarLayout(
+      sidebarPanel(
+        selectizeInput("scatter_x", "Choose x-axis:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        selectizeInput("scatter_y", "Choose y axis:", choices = NULL, options = list("actions-box" = TRUE, "live-search" = TRUE)),
+        tags$hr(), # Separator line
+        actionButton("reset_scatter", "Reset"),
+
+        width=2
+      ),
+      mainPanel(
+        plotOutput("scatterPlot", height = "700px", width = "95%", brush = brushOpts(id = "scatter_brush")),
+        downloadButton("downloadScatter", "Download Boxplot as PDF"),
+        dataTableOutput("corrTable"),
+        downloadButton("downloadCorrelationTSV", "Download Correlation Table as TSV")  
+      )
+    )
+  ),
+  tabPanel("Data table",
+    dataTableOutput("dataTable"),
+    downloadButton("downloadDataTableTSV", "Download Data Table")  
+  )
 )
 
 server <- function(input, output, session) {
@@ -138,6 +155,7 @@ server <- function(input, output, session) {
       updateSelectInput(session, "filterFactor", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
       updateSelectInput(session, "filterFactor2", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
       updateSelectInput(session, "filterFactor3", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
+      updateSelectInput(session, "filterFactor4", choices = c("", names(input.tmp[sapply(input.tmp, is.factor)])))
       updateSelectInput(session, "box1", choices = names(input.tmp[sapply(input.tmp, is.factor)]))
       updateSelectInput(session, "box2", choices = c("", names(input.tmp[sapply(input.tmp, is.numeric)])))
       updateSelectInput(session, "scatter_x", choices = c("", names(input.tmp[sapply(input.tmp, is.numeric)]))) 
@@ -189,6 +207,12 @@ server <- function(input, output, session) {
       updateSelectInput(session, "level3", choices = c("", levels(data()[[input$filterFactor3]])))
     }
   }, ignoreInit = TRUE)
+  # Update level choices when filterFactor changes
+  observeEvent(input$filterFactor4, {
+    if (input$filterFactor4 != "") {
+      updateSelectInput(session, "level4", choices = c("", levels(data()[[input$filterFactor4]])))
+    }
+  }, ignoreInit = TRUE)
   # Update scatter_y when box2 changes
   observeEvent(input$box2, {
     if (input$box2 != input$scatter_y) {
@@ -220,12 +244,15 @@ server <- function(input, output, session) {
       updateSelectInput(session, "factor", selected = "")
       updateSelectInput(session, "level", selected = "")
       updateSelectInput(session, "level2", selected = "")
+      updateSelectInput(session, "level3", selected = "")
+      updateSelectInput(session, "level4", selected = "")
       updateSelectInput(session, "box1", selected = "")
       updateSelectInput(session, "box2", selected = "") 
       updateSelectInput(session, "scatter_y", selected = "")
       updateSelectInput(session, "filterFactor", selected = "")
       updateSelectInput(session, "filterFactor2", selected = "")
-      updateSelectInput(session, "filterFactor3", selected = "") 
+      updateSelectInput(session, "filterFactor3", selected = "")
+      updateSelectInput(session, "filterFactor4", selected = "") 
       # Reset reactive values
       filtered_data(NULL)  # Reset filtered_data
       brushed_data(NULL)   # Reset brushed_data
@@ -243,12 +270,15 @@ server <- function(input, output, session) {
       updateSelectInput(session, "factor", selected = "")
       updateSelectInput(session, "level", selected = "")
       updateSelectInput(session, "level2", selected = "")
+      updateSelectInput(session, "level3", selected = "")
+      updateSelectInput(session, "level4", selected = "")
       updateSelectInput(session, "box1", selected = "")
       updateSelectInput(session, "box2", selected = "") 
       updateSelectInput(session, "scatter_y", selected = "")
       updateSelectInput(session, "filterFactor", selected = "")
       updateSelectInput(session, "filterFactor2", selected = "")
       updateSelectInput(session, "filterFactor3", selected = "") 
+      updateSelectInput(session, "filterFactor4", selected = "") 
       # Reset reactive values
       filtered_data(NULL)  # Reset filtered_data
       brushed_data(NULL)   # Reset brushed_data
@@ -313,6 +343,10 @@ observe({
     if (!is.null(input$filterFactor3) && input$filterFactor3 != "" && !is.null(input$level3) && length(input$level3) > 0) {
       filtered <- filtered %>%
         filter(.data[[input$filterFactor3]] %in% input$level3)
+    }
+    if (!is.null(input$filterFactor4) && input$filterFactor4 != "" && !is.null(input$level4) && length(input$level4) > 0) {
+      filtered <- filtered %>%
+        filter(.data[[input$filterFactor4]] %in% input$level4)
     }
     # Check if filtered data is not empty
     if (nrow(filtered) > 0) {
@@ -386,7 +420,7 @@ boxplot_output <- reactive({
     # Calculate the mean for input$box2 for each group in 'interaction_values'
     means <- data_filtered %>%
       group_by(interaction_values) %>%
-      summarise(mean_val = mean(.data[[input$box2]], na.rm = TRUE)) %>%
+      summarise(mean_val = median(.data[[input$box2]], na.rm = TRUE)) %>%
       arrange(desc(mean_val))
     # Reorder the levels based on the calculated means
     if (nrow(means) > 0 && !all(is.na(means$mean_val))) {
@@ -486,6 +520,57 @@ output$downloadBox <- downloadHandler(
 )
 
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## #
+# Summary statistics table
+summary_stats <- reactive({
+  req(input$box1, input$box2)
+  
+  # Calculate summary statistics (including median) for the selected data
+  # Initial data filtering
+  data_filtered <- if (!is.null(brushed_data())) {
+    brushed_data()
+  } else if (!is.null(filtered_data())) {
+    filtered_data()
+  } else {
+    data()
+  }
+  
+  # Create unique interaction values based on the selected box1 variables
+  interaction_values <- interaction(data_filtered[, input$box1, drop = FALSE], drop = TRUE)
+  
+  # Convert input$box2 to a symbol
+  box2_col <- sym(input$box2)
+  
+  summary_stats <- rev(data_filtered %>%
+    group_by(InteractionValues = interaction_values) %>%
+    summarise(
+      Median = round(median(!!box2_col, na.rm = TRUE), 2),  # Round to 2 decimal places
+      # Add other summary statistics here as needed
+      Mean = round(mean(!!box2_col, na.rm = TRUE), 2),    # Example: round mean to 2 decimal places
+      SD = round(sd(!!box2_col, na.rm = TRUE), 2),        # Example: round standard deviation to 2 decimal places
+      # ...
+    )) %>%
+    select(InteractionValues, Median, Mean, SD, everything())
+
+  # You can customize the appearance of the table if desired
+  # datatable(summary_stats, options = list(pageLength = 10))
+})
+
+output$summaryTable <- renderDataTable({
+  datatable(summary_stats(), caption = "Summary_stats")
+})
+# Add a download button for the summary statistics table
+output$downloadSummary <- downloadHandler(
+  filename = function() {
+    "summary_stats.tsv"
+  },
+  content = function(file) {
+    write.table(summary_stats(), file, sep = "\t", row.names = FALSE)
+  }
+)
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## #
+
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## #
 ## ANOVA TABLE
 generate_anova_table <- reactive({
   req(input$box1, input$box2)  
@@ -574,7 +659,7 @@ scatterplot_output <- reactive({
       # Calculate the mean for input$box2 for each group in 'interaction_values'.
       means <- data_filtered %>%
         group_by(interaction_values) %>%
-        summarise(mean_val = mean(.data[[input$box2]], na.rm = TRUE)) %>%
+        summarise(mean_val = median(.data[[input$box2]], na.rm = TRUE)) %>%
         arrange(desc(mean_val))
       # Reorder the levels based on the calculated means.
       if (nrow(means) > 0 && !all(is.na(means$mean_val))) {
