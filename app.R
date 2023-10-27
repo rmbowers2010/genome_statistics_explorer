@@ -411,9 +411,9 @@ boxplot_output <- reactive({
         ungroup()
     } else {
       data_filtered$interaction_values <- as.character(data_filtered[[input$box1]])
-      data_filtered$interaction_values <- factor(data_filtered$interaction_values,
-      # original_levels should be defined to represent your initial, unsorted state. 
-                                                levels = original_levels)
+      # data_filtered$interaction_values <- factor(data_filtered$interaction_values,
+      # # original_levels should be defined to represent your initial, unsorted state. 
+      #                                           levels = original_levels)
     }
     # Make interaction_values a factor with proper levels
     data_filtered$interaction_values <- factor(data_filtered$interaction_values, levels = unique(data_filtered$interaction_values))
@@ -521,10 +521,10 @@ output$downloadBox <- downloadHandler(
 
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## #
 # Summary statistics table
+# Summary statistics table
 summary_stats <- reactive({
   req(input$box1, input$box2)
   
-  # Calculate summary statistics (including median) for the selected data
   # Initial data filtering
   data_filtered <- if (!is.null(brushed_data())) {
     brushed_data()
@@ -540,19 +540,25 @@ summary_stats <- reactive({
   # Convert input$box2 to a symbol
   box2_col <- sym(input$box2)
   
-  summary_stats <- rev(data_filtered %>%
+  summary_df <- data_filtered %>%
     group_by(InteractionValues = interaction_values) %>%
     summarise(
-      Median = round(median(!!box2_col, na.rm = TRUE), 2),  # Round to 2 decimal places
-      # Add other summary statistics here as needed
-      Mean = round(mean(!!box2_col, na.rm = TRUE), 2),    # Example: round mean to 2 decimal places
-      SD = round(sd(!!box2_col, na.rm = TRUE), 2),        # Example: round standard deviation to 2 decimal places
-      # ...
-    )) %>%
-    select(InteractionValues, Median, Mean, SD, everything())
+      Median = round(median(!!box2_col, na.rm = TRUE), 2),  
+      Mean = round(mean(!!box2_col, na.rm = TRUE), 2),    
+      SD = round(sd(!!box2_col, na.rm = TRUE), 2)
+    )
+  
+  # Order the table based on the Median value if sort_boxplot() is TRUE
+  if(sort_boxplot()) {
+    ordered_levels <- summary_df %>%
+      arrange(desc(Median)) %>%
+      .$InteractionValues
+    
+    summary_df$InteractionValues <- factor(summary_df$InteractionValues, levels = ordered_levels)
+    summary_df <- arrange(summary_df, InteractionValues)
+  }
 
-  # You can customize the appearance of the table if desired
-  # datatable(summary_stats, options = list(pageLength = 10))
+  return(summary_df)
 })
 
 output$summaryTable <- renderDataTable({
